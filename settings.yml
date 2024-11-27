@@ -1,7 +1,7 @@
 featured_tag:
   default: ""
-  type: text
-  description: "Tag to filter topics to feature on the homepage."
+  type: list
+  description: "Comma-separated list of tags to filter topics to feature on the homepage."
 
 number_of_topics:
   default: 5
