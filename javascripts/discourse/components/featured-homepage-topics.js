@@ -1,131 +1,57 @@
-import Component from "@glimmer/component";
-import { tracked } from "@glimmer/tracking";
+import Component from "@ember/component";
 import { action } from "@ember/object";
-import { service } from "@ember/service";
-import { emojiUnescape } from "discourse/lib/text";
-import { defaultHomepage } from "discourse/lib/utilities";
-import getURL from "discourse-common/lib/get-url";
-import I18n from "I18n";
 
-const FEATURED_CLASS = "featured-homepage-topics";
-
-export default class FeaturedHomepageTopics extends Component {
-  @service router;
-  @service store;
-  @service siteSettings;
-  @service currentUser;
-  @service keyValueStore;
-
-  @tracked featuredTagTopics = null;
-  @tracked
-  toggleTopics =
-    this.keyValueStore.getItem("toggleTopicsState") === "true" || false;
-
-  constructor() {
-    super(...arguments);
-    this.router.on("routeDidChange", this.checkShowHere);
-  }
-
-  willDestroy() {
-    super.willDestroy(...arguments);
-    this.router.off("routeDidChange", this.checkShowHere);
-  }
+export default Component.extend({
+  featuredTagTopics: [],
 
   @action
-  toggle() {
-    this.toggleTopics = !this.toggleTopics;
-    this.keyValueStore.setItem("toggleTopicsState", this.toggleTopics);
-  }
+  async getBannerItems() {
+    const bannerItems = [];
 
-  @action
-  checkShowHere() {
-    document.body.classList.toggle(FEATURED_CLASS, this.showHere);
-  }
+    // Fetch topics if featured_tag is set
+    if (settings.featured_tag) {
+      const sortOrder = settings.sort_by_created ? "created" : "activity";
+      const topicList = await this.store.findFiltered("topicList", {
+        filter: "latest",
+        params: {
+          tags: [`${settings.featured_tag}`],
+          order: sortOrder,
+        },
+      });
 
-  get showHere() {
-    const { currentRoute, currentRouteName } = this.router;
+      bannerItems.push(
+        ...topicList.topics
+          .filter(
+            (topic) =>
+              topic.image_url &&
+              (!settings.hide_closed_topics || !topic.closed)
+          )
+          .slice(0, settings.number_of_topics)
+          .map((topic) => ({
+            type: "topic",
+            id: topic.id,
+            title: topic.title,
+            image_url: topic.image_url,
+            url: `/t/${topic.slug}/${topic.id}`,
+          }))
+      );
+    }
 
-    if (currentRoute) {
-      switch (settings.show_on) {
-        case "homepage":
-          return currentRouteName === `discovery.${defaultHomepage()}`;
-        case "top_menu":
-          const topMenuRoutes = this.siteSettings.top_menu
-            .split("|")
-            .filter(Boolean);
-          return topMenuRoutes.includes(currentRoute.localName);
-        case "all":
-          return !/editCategory|admin|full-page-search/.test(currentRouteName);
-        default:
-          return false;
+    // Fetch categories if configured
+    if (settings.featured_categories) {
+      const categoryIds = settings.featured_categories.split("|");
+      for (const categoryId of categoryIds) {
+        const category = await this.store.find("category", categoryId);
+        bannerItems.push({
+          type: "category",
+          id: category.id,
+          title: category.name,
+          image_url: category.uploaded_logo?.url || category.background_url,
+          url: `/c/${category.id}`,
+        });
       }
     }
 
-    return false;
-  }
-
-  get featuredTitle() {
-    // falls back to setting for backwards compatibility
-    return I18n.t(themePrefix("featured_topic_title")) || settings.title_text;
-  }
-
-  get showFor() {
-    if (
-      settings.show_for === "everyone" ||
-      (settings.show_for === "logged_out" && !this.currentUser) ||
-      (settings.show_for === "logged_in" && this.currentUser)
-    ) {
-      return true;
-    } else {
-      return false;
-    }
-  }
-
-  get mobileStyle() {
-    if (
-      settings.show_all_always &&
-      settings.mobile_style === "stacked_on_smaller_screens"
-    ) {
-      return "-mobile-stacked";
-    } else if (settings.show_all_always) {
-      return "-mobile-horizontal";
-    } else {
-      return;
-    }
-  }
-
-  emojiTitle(t) {
-    return emojiUnescape(t);
-  }
-
-  topicHref(t) {
-    return getURL(
-      `/t/${t.slug}/${t.id}/${
-        settings.always_link_to_first_post ? "" : t.last_read_post_number
-      }`
-    );
-  }
-
-  @action
-  async getBannerTopics() {
-    if (!settings.featured_tag) {
-      return;
-    }
-
-    const sortOrder = settings.sort_by_created ? "created" : "activity";
-    const topicList = await this.store.findFiltered("topicList", {
-      filter: "latest",
-      params: {
-        tags: [`${settings.featured_tag}`],
-        order: sortOrder,
-      },
-    });
-
-    this.featuredTagTopics = topicList.topics
-      .filter(
-        (topic) =>
-          topic.image_url && (!settings.hide_closed_topics || !topic.closed)
-      )
-      .slice(0, settings.number_of_topics);
-  }
-}
+    this.featuredTagTopics = bannerItems;
+  },
+});
