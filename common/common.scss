@@ -209,3 +209,26 @@ button.featured-topic-toggle {
   justify-content: flex-start;
   margin-bottom: 1.5em;
 }
+.featured-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 10px;
+}
+
+.featured-item img {
+  max-width: 100%;
+  border-radius: 5px;
+}
+
+.featured-item h3 {
+  margin-top: 10px;
+  font-size: 1.2em;
+  font-weight: bold;
+}
+
+.featured-item p {
+  margin-top: 5px;
+  font-size: 0.9em;
+  color: #888;
+}
